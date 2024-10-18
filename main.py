@@ -4,7 +4,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from models import Department, Job, Employee, Base  
 from io import StringIO
-app = FastAPI()
 
 DATABASE_URL = "sqlite:///./test.db"  
 engine = create_engine(DATABASE_URL)
@@ -14,32 +13,36 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI()
 
 def load_departments(df: pd.DataFrame, db: Session):
-    df.fillna({'department': 'Unknown'}, inplace=True)
+    df.fillna({0: 999}, inplace=True)
     for _, row in df.iterrows():
-        department = Department(id=row[0], department=row[1])  # Usar índices
+        department = Department(id=row[0], department=row[1])  
         db.add(department)
     db.commit()
 
 def load_jobs(df: pd.DataFrame, db: Session):
-    df.fillna({'job': 'Unknown'}, inplace=True)
+    df.fillna({0: 999}, inplace=True)
     for _, row in df.iterrows():
-        job = Job(id=row[0], job=row[1])  # Usar índices
+        job = Job(id=row[0], job=row[1])  
         db.add(job)
     db.commit()
 
 def load_employees(df: pd.DataFrame, db: Session):
     df.fillna({
-        2: pd.NaT,  # Rellenar con 'NaT' para datetime
-        3: None,    # Rellenar NaN en 'department_id' con None
-        4: None     # Rellenar NaN en 'job_id' con None
+        2: pd.NaT,  #Hire Date
+        3: 999,    #Department
+        4: 999     #Job
     }, inplace=True)
+
+    df[3] = df[3].fillna(999).astype(int)  # Convertir department_id a int
+    df[4] = df[4].fillna(999).astype(int)
+
     for _, row in df.iterrows():
         employee = Employee(
             id=row[0],
             name=row[1],
-            hire_datetime=pd.to_datetime(row[2]),
-            department_id=row[3],
-            job_id=row[4]
+            hire_datetime=pd.to_datetime(row[2], errors = 'coerce'),
+            department_id=int(row[3]),
+            job_id=int(row[4])
         )
         db.add(employee)
     db.commit()
@@ -58,12 +61,13 @@ async def upload_data(department_file: UploadFile = File(...),
 
     db = Session()
 
-    db.query(Department).delete()
-    db.query(Job).delete()
-    db.query(Employee).delete()  # Limpia la tabla de departamentos
-    db.commit()
 
     try:
+        db.query(Department).delete()
+        db.query(Job).delete()
+        db.query(Employee).delete()  # Limpia la tabla de departamentos
+        db.commit()
+
         load_departments(df_departments, db)
         load_jobs(df_jobs, db)
         load_employees(df_employees, db)
